@@ -1,7 +1,7 @@
 # 股票价格自动刷新显示工具
 
 这是一个用 Python 编写的命令行股票价格实时显示工具，能够从新浪财经接口获取 A 股实时数据，并提供自动刷新和收益计算功能。
-<img width="2184" height="1578" alt="image" src="https://github.com/user-attachments/assets/fb225155-f3f7-4876-81ac-c56d2309825c" />
+<img width="2166" height="930" alt="image" src="https://github.com/user-attachments/assets/567cd879-d05a-41ba-ab8b-c1a2639021e3" />
 
 
 ## 功能特点
