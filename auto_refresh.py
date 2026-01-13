@@ -249,16 +249,19 @@ def display_stock_info(stock_info, holding_quantity=0, last_price=None):
             trend_symbol = "\033[93m-\033[0m"  # 首次显示为黄色持平
 
         # 根据涨跌显示颜色（如果终端支持）
+        change_pct_str = f"{change_pct:>+8.2f}%"
+        profit_str = f"{profit_amount:>+10.2f}"
+
         if change > 0:
-            change_pct_display = f"\033[91m{change_pct:>+8.2f}%\033[0m"  # 红色
-            profit_display = f"\033[91m{profit_amount:>+10.2f}\033[0m"  # 红色
+            change_pct_display = f"\033[91m{change_pct_str}\033[0m"  # 红色
+            profit_display = f"\033[91m{profit_str}\033[0m"  # 红色
         elif change < 0:
-            change_pct_display = f"\033[92m{change_pct:>+8.2f}%\033[0m"  # 绿色
-            profit_display = f"\033[92m{profit_amount:>+10.2f}\033[0m"  # 绿色
+            change_pct_display = f"\033[92m{change_pct_str}\033[0m"  # 绿色
+            profit_display = f"\033[92m{profit_str}\033[0m"  # 绿色
         else:
             # 对于零值，使用+0.00格式以保持对齐
-            change_pct_display = f"\033[93m{change_pct:+8.2f}%\033[0m"  # 黄色，显示为+0.00（停牌或无变动）
-            profit_display = f"\033[93m{profit_amount:+10.2f}\033[0m"  # 黄色
+            change_pct_display = f"\033[93m{change_pct_str}\033[0m"  # 黄色，显示为+0.00（停牌或无变动）
+            profit_display = f"\033[93m{profit_str}\033[0m"  # 黄色
 
         # 使用固定长度填充以确保对齐
         name = stock_info['name']
@@ -269,17 +272,19 @@ def display_stock_info(stock_info, holding_quantity=0, last_price=None):
         # 使用新函数格式化各列
         name_part = format_column_text(name_display, 20, 'right')
         quantity_part = format_column_text(holding_quantity, 10, 'right')
-        trend_part = format_with_color_padding(trend_symbol, 6, '>')  # 趋势符号
+        # 确保趋势符号列宽度固定为6个字符（不包括颜色代码），右对齐，以容纳最宽的符号
+        # trend_part = format_with_color_padding(trend_symbol, 6, '>')  # 趋势符号，右对齐
+        trend_aligned = " " * 5 + trend_symbol
         high_part = format_column_text(f"{stock_info.get('high', 0):.2f}", 8, 'right')  # 最高价
         low_part = format_column_text(f"{stock_info.get('low', 0):.2f}", 8, 'right')  # 最低价
         price_part = format_column_text(f"{display_price:.2f}", 10, 'right')  # 使用调整后的价格显示
 
         # 计算涨跌百分比所需的空格数（基于非颜色版本的长度）
-        pct_spaces = 12 - len(f"{change_pct:>+8.2f}%")
+        pct_spaces = 12 - wcswidth(change_pct_str)
         pct_aligned = " " * max(0, pct_spaces) + change_pct_display
 
         # 利润金额间距
-        profit_spaces = 14 - len(f"{profit_amount:>+10.2f}")
+        profit_spaces = 14 - wcswidth(profit_str)
         profit_aligned = " " * max(0, profit_spaces) + profit_display
 
         # 格式化时间显示（仅时间，无日期）
@@ -288,7 +293,7 @@ def display_stock_info(stock_info, holding_quantity=0, last_price=None):
         # 使用新函数格式化时间列
         time_part = format_column_text(stock_time, 10, 'right')
 
-        print(f"{name_part} {quantity_part} {trend_part} {high_part} {low_part} {price_part} {pct_aligned} {profit_aligned} {time_part}")
+        print(f"{name_part} {quantity_part} {trend_aligned} {high_part} {low_part} {price_part} {pct_aligned} {profit_aligned} {time_part}")
 
         return profit_amount, display_price, stock_info['pre_close'] * holding_quantity  # 返回利润金额、当前价格和成本
     return 0, 0, 0  # 如果没有股票信息，返回0
@@ -297,7 +302,7 @@ def display_stock_info(stock_info, holding_quantity=0, last_price=None):
 def main():
     parser = argparse.ArgumentParser(description='Stock Price Display Tool')
     parser.add_argument('--list', '-l', default='stock_list.txt', help='Stock list file path')
-    parser.add_argument('--interval', '-i', type=int, help='Monitoring interval in seconds (enables auto-refresh mode)')
+    parser.add_argument('--interval', '-i', type=int, default=30, help='Monitoring interval in seconds (enables auto-refresh mode)')
     parser.add_argument('--sort-by-profit', '-s', action='store_true', help='Sort by profit amount (default: sort by code)')
 
     args = parser.parse_args()
@@ -309,14 +314,9 @@ def main():
         print(f"Stock list not found or empty: {args.list}")
         sys.exit(1)
 
-    if args.interval:
-        print(f"Start monitoring {len(stock_list)} stocks, press Ctrl+C to stop...")
-        print(f"Update interval: {args.interval} seconds")
-        monitor_loop(stock_list, args.interval, sort_by_profit=args.sort_by_profit)
-    else:
-        print(f"Displaying stock data for {len(stock_list)} stocks...")
-        display_once(stock_list, sort_by_profit=args.sort_by_profit)
-
+    print(f"Start monitoring {len(stock_list)} stocks, press Ctrl+C to stop...")
+    print(f"Update interval: {args.interval} seconds")
+    monitor_loop(stock_list, args.interval, sort_by_profit=args.sort_by_profit)
 
 def get_all_stock_data(stock_list):
     """并发获取所有股票数据"""
@@ -350,127 +350,6 @@ def get_all_stock_data(stock_list):
                 }
 
     return stock_data
-
-def display_once(stock_list, sort_by_profit=True):
-    """只显示一次股票信息"""
-    print("-" * 120)
-    # 使用新函数格式化表头以实现正确对齐
-    header_name = format_column_text('Name', 20, 'right')
-    header_qty = format_column_text('Qty', 10, 'right')
-    header_trend = format_column_text('Trend', 6, 'right')
-    header_high = format_column_text('High', 8, 'right')
-    header_low = format_column_text('Low', 8, 'right')
-    header_price = format_column_text('Price', 10, 'right')
-    header_change = format_column_text('Change%', 12, 'right')
-    header_profit = format_column_text('Profit', 14, 'right')
-    header_time = format_column_text('Time', 10, 'right')
-
-    print(f"{header_name} {header_qty} {header_trend} {header_high} {header_low} {header_price} {header_change} {header_profit} {header_time}")
-    print("-" * 120)
-
-    # 并发获取所有股票数据
-    all_stock_data = get_all_stock_data(stock_list)
-
-    # 计算每只股票的收益并存储到列表中，用于排序
-    stock_profits = []
-
-    # 先收集所有股票的上次价格，用于趋势判断
-    last_prices_for_display = {}
-    for stock_item in stock_list:
-        stock_code = stock_item['code']
-        last_prices_for_display[stock_code] = last_prices.get(stock_code)
-
-    # 然后处理股票数据并更新价格
-    for stock_item in stock_list:
-        stock_code = stock_item['code']
-        stock_data = all_stock_data[stock_code]
-        stock_info = stock_data['info']
-        holding_quantity = stock_data['quantity']
-
-        if stock_info:
-            # 获取上次价格用于趋势判断（使用循环开始时的值）
-            last_price = last_prices_for_display[stock_code]
-            # 计算利润金额但暂不显示
-            profit_amount = (stock_info['price'] - stock_info['pre_close']) * holding_quantity
-            # 更新最后价格
-            if stock_info['price'] > 0:  # 只有有效价格才更新
-                last_prices[stock_code] = stock_info['price']
-
-            # 添加到收益列表用于排序
-            stock_profits.append({
-                'stock_item': stock_item,
-                'stock_info': stock_info,
-                'holding_quantity': holding_quantity,
-                'profit_amount': profit_amount
-            })
-        else:
-            # 如果无法获取数据，该股票的收益为0
-            stock_profits.append({
-                'stock_item': stock_item,
-                'stock_info': None,
-                'holding_quantity': holding_quantity,
-                'profit_amount': 0.0
-            })
-
-    # 根据参数决定是否按收益金额排序
-    if sort_by_profit:
-        # 按收益金额排序（从高到低）
-        stock_profits.sort(key=lambda x: x['profit_amount'], reverse=True)
-
-    total_profit = 0.0
-    total_cost = 0.0  # 总成本
-    # 按排序后的顺序显示
-    for stock_profit in stock_profits:
-        stock_item = stock_profit['stock_item']
-        stock_info = stock_profit['stock_info']
-        holding_quantity = stock_profit['holding_quantity']
-
-        if stock_info:
-            # 获取上次价格用于趋势判断（使用循环开始时的值）
-            last_price = last_prices_for_display[stock_item['code']]
-            # 显示股票信息并获取利润金额、当前价格和成本
-            profit_amount, current_price, cost = display_stock_info(stock_info, holding_quantity, last_price)
-            total_profit += profit_amount
-            total_cost += cost
-        else:
-            name_display = stock_item['code'][:8]  # 限制名称长度为8个字符
-            # 使用新函数处理对齐以匹配正常显示
-            name_str = format_column_text(name_display, 20, 'right')
-            qty_str = format_column_text(holding_quantity, 10, 'right')
-            trend_str = format_column_text('-', 6, 'right')  # 趋势符号
-            high_str = format_column_text('--', 8, 'right')  # 最高价
-            low_str = format_column_text('--', 8, 'right')   # 最低价
-            price_str = format_column_text('--', 10, 'right')
-            pct_str = format_column_text('--', 12, 'right')
-            profit_str = format_column_text('--', 14, 'right')
-            time_str = format_column_text('--', 10, 'right')
-            print(f"{name_str} {qty_str} {trend_str} {high_str} {low_str} {price_str} {pct_str} {profit_str} {time_str}")
-
-    print("-" * 120)
-    # 计算整体收益率
-    overall_return_rate = 0.0
-    if total_cost != 0:
-        overall_return_rate = (total_profit / total_cost) * 100
-
-    # 显示总收益和整体收益率
-    if total_profit > 0:
-        total_profit_str = f"\033[91m{total_profit:>10.2f}\033[0m"  # 红色表示总盈利
-    elif total_profit < 0:
-        total_profit_str = f"\033[92m{total_profit:>10.2f}\033[0m"  # 绿色表示总亏损
-    else:
-        total_profit_str = f"\033[93m{total_profit:>10.2f}\033[0m"  # 黄色表示无盈亏
-
-    if overall_return_rate > 0:
-        overall_return_rate_str = f"\033[91m{overall_return_rate:>8.2f}%\033[0m"  # 红色表示正收益率
-    elif overall_return_rate < 0:
-        overall_return_rate_str = f"\033[92m{overall_return_rate:>8.2f}%\033[0m"  # 绿色表示负收益率
-    else:
-        overall_return_rate_str = f"\033[93m{overall_return_rate:>8.2f}%\033[0m"  # 黄色表示零收益率
-
-    # 使用新函数格式化标签以实现正确对齐
-    total_profit_label = format_column_text('Total Profit:', 58, 'right')
-    overall_return_label = format_column_text('Overall Return:', 15, 'right')
-    print(f"{total_profit_label} {total_profit_str}  {overall_return_label} {overall_return_rate_str}")
 
 
 def monitor_loop(stock_list, interval, sort_by_profit=True):
@@ -569,7 +448,7 @@ def monitor_loop(stock_list, interval, sort_by_profit=True):
                     # 使用新函数处理对齐以匹配正常显示
                     name_str = format_column_text(name_display, 20, 'right')
                     qty_str = format_column_text(holding_quantity, 10, 'right')
-                    trend_str = format_column_text('-', 6, 'right')  # 趋势符号
+                    trend_str = format_with_color_padding('\033[93m-\033[0m', 6, '>')  # 趋势符号，右对齐
                     high_str = format_column_text('--', 8, 'right')  # 最高价
                     low_str = format_column_text('--', 8, 'right')   # 最低价
                     price_str = format_column_text('--', 10, 'right')
